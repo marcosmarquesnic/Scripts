@@ -1,4 +1,4 @@
-# Configurador Automático de Rede (Netplan + OpenStack)
+# Configuração Automática de Rede (Netplan + OpenStack)
 
 Este script Bash automatiza a configuração de rede IPv6 estática em uma instância Ubuntu provisionada via OpenStack, utilizando o Netplan. Ele permite que você conecte-se via SSH a uma instância e atualize sua configuração de rede de forma segura e rápida.
 
