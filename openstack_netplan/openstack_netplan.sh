@@ -1,23 +1,28 @@
 #!/bin/bash
 
+## Este script deve ser executado como um usuário que já tenha acesso SSH configurado.
+## Se for executar como root, certifique-se de que a chave SSH está disponível no ~/.ssh do root.
+
 # Verifica se todos os argumentos foram passados corretamente
 if [ "$#" -ne 3 ]; then
-    echo "Uso: $0 <IPv4> <Caminho_Chave_SSH> <IPv6>"
+    echo "Uso: $0 <IPv4> <USUARIO> <IPv6>"
     exit 1
 fi
 
 # Atribui os argumentos a variáveis locais
 IPV4="$1"                # IPv4 da instância para conexão SSH
-CHAVE_SSH="$2"           # Caminho completo da chave SSH para autenticação
+USUARIO="$2"           # Caminho completo da chave SSH para autenticação
 IPV6="$3"                # IPv6 fixo a ser configurado na instância
 
 echo "Iniciando conexão SSH para o servidor remoto..."
 # Conecta-se ao servidor remoto e configura o Netplan
-ssh -o StrictHostKeyChecking=no -t -i "$CHAVE_SSH" ubuntu@$IPV4 << EOF
+ssh -o StrictHostKeyChecking=no -t "$USUARIO@$IPV4" << EOF
   set -e  # Faz o script parar em caso de erro
 
+  TIMESTAMP=\$(date +"%Y%m%d_%H%M%S")
+
   echo "Criando backup do Netplan..."
-  sudo cp /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.old
+  sudo cp /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.old_\$TIMESTAMP
 
   echo "Extraindo MAC address da interface ens4..."
 MAC=\$(sudo grep -A 5 'ens4:' /etc/netplan/50-cloud-init.yaml | sudo grep -oP 'macaddress: "\K[^"]+' | head -n 1)
