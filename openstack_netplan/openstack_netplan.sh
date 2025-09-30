@@ -1,65 +1,84 @@
 #!/bin/bash
 
-## Este script deve ser executado como um usuário que já tenha acesso SSH configurado.
-## Se for executar como root, certifique-se de que a chave SSH está disponível no ~/.ssh do root.
+## Uso: ./configura_rede.sh <IPv4> <USUARIO> <IPv6>
+## Exemplo: ./configura_rede.sh 10.0.0.2 ubuntu 2804:xxxx::1234
 
-# Verifica se todos os argumentos foram passados corretamente
 if [ "$#" -ne 3 ]; then
     echo "Uso: $0 <IPv4> <USUARIO> <IPv6>"
     exit 1
 fi
 
-# Atribui os argumentos a variáveis locais
-IPV4="$1"                # IPv4 da instância para conexão SSH
-USUARIO="$2"           # Caminho completo da chave SSH para autenticação
-IPV6="$3"                # IPv6 fixo a ser configurado na instância
+IPV4="$1"
+USUARIO="$2"
+IPV6="$3"
 
-echo "Iniciando conexão SSH para o servidor remoto..."
-# Conecta-se ao servidor remoto e configura o Netplan
+# 🔹 Valores fixos do ambiente (ajusta conforme necessário)
+GATEWAY="<colocar o gateway>"
+DNS1="colocar o dns1"
+DNS2="colocar o dns2"
+
+echo "Iniciando conexão SSH para $USUARIO@$IPV4 ..."
+
 ssh -o StrictHostKeyChecking=no -t "$USUARIO@$IPV4" << EOF
-  set -e  # Faz o script parar em caso de erro
+  set -e
 
   TIMESTAMP=\$(date +"%Y%m%d_%H%M%S")
 
-  echo "Criando backup do Netplan..."
-  sudo cp /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.old_\$TIMESTAMP
+  echo "Procurando arquivo netplan..."
+  if [ -f /etc/netplan/50-cloud-init.yaml ]; then
+    ORIG_FILE="/etc/netplan/50-cloud-init.yaml"
+  elif [ -f /etc/netplan/01-netcfg.yaml ]; then
+    ORIG_FILE="/etc/netplan/01-netcfg.yaml"
+  else
+    echo "Nenhum arquivo netplan encontrado!"
+    exit 1
+  fi
 
-  echo "Extraindo MAC address da interface ens4..."
-MAC=\$(sudo grep -A 5 'ens4:' /etc/netplan/50-cloud-init.yaml | sudo grep -oP 'macaddress: "\K[^"]+' | head -n 1)
+  echo "Renomeando arquivo original..."
+  sudo mv "\$ORIG_FILE" "\${ORIG_FILE}.old_\$TIMESTAMP"
 
-if [ -z "\$MAC" ]; then
-  echo "Erro: Não foi possível extrair o MAC address. Abortando."
-  exit 1
-fi
+  echo "Pegando MAC da interface ens4..."
+  MAC=\$(ip link show ens4 | awk '/ether/ {print \$2}')
+  if [ -z "\$MAC" ]; then
+    echo "Erro: não consegui pegar o MAC da ens4"
+    exit 1
+  fi
+  echo "MAC encontrado: \$MAC"
 
-echo "MAC Address extraído: \$MAC"
+  echo "Gerando novo /etc/netplan/01-netcfg.yaml ..."
+  sudo awk -v ipv6="$IPV6" -v mac="\$MAC" -v gw="$GATEWAY" -v dns1="$DNS1" -v dns2="$DNS2" '
+    /^ *ens4:/ {
+      print "    ens4:";
+      print "      addresses: [\"" ipv6 "/64\"]";
+      print "      dhcp4: false";
+      print "      dhcp6: false";
+      print "      accept-ra: false";
+      print "      match:";
+      print "        macaddress: \"" mac "\"";
+      print "      mtu: 1450";
+      print "      routes:";
+      print "        - to: default";
+      print "          via: " gw;
+      print "      nameservers:";
+      print "        addresses: [\"" dns1 "\",\"" dns2 "\"]";
+      skip=1; next
+    }
+    skip && /^[^ ]/ { skip=0 }
+    !skip { print }
+  ' "\${ORIG_FILE}.old_\$TIMESTAMP" | sudo tee /etc/netplan/01-netcfg.yaml > /dev/null
 
-  echo "Atualizando configuração do Netplan..."
-  sudo tee /etc/netplan/50-cloud-init.yaml > /dev/null << NETPLAN
-network:
-  version: 2
-  ethernets:
-    ens4:
-      addresses: ['$IPV6/64']
-      accept-ra: false
-      dhcp4: false
-      dhcp6: false
-      match:
-        macaddress: "\$MAC"
-      mtu: 1500
-      set-name: ens4
-      routes:
-        - to: default
-          via: <network>
-      nameservers:
-        addresses: ['<ipv61>','<ipv62>']
-    ens3:
-      dhcp4: true
-      mtu: 1450
-NETPLAN
+  echo "Ajustando permissões do netplan..."
+  sudo chown root:root /etc/netplan/01-netcfg.yaml
+  sudo chmod 600 /etc/netplan/01-netcfg.yaml
 
-  echo "Aplicando Netplan..."
+  echo "Desativando network config do cloud-init..."
+  sudo mkdir -p /etc/cloud/cloud.cfg.d
+  echo "network:
+  config: disabled" | sudo tee /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg > /dev/null
+
+
+  echo "Aplicando netplan..."
   sudo netplan apply
 
-  echo "Configuração concluída com sucesso!"
+  echo "Rede configurada com sucesso!"
 EOF

@@ -1,37 +1,67 @@
 > Este README.md gerado pelo chatGPT 
 
-# Configurador de IPv6 via SSH
+# Guia rápido – Script de configuração de rede
 
-Este script conecta-se a uma instância via SSH, realiza backup da configuração atual do Netplan, configura um IPv6 fixo na interface `ens4` e aplica a nova configuração.
+Este script serve para **configurar a rede de uma VM/servidor** (IPv4 + IPv6) de forma automática.  
+Ele faz tudo sozinho via SSH, então você só precisa rodar o comando certo.  
 
-## Pré-requisitos
+Verifique a documentação no monday de criação de VMs pelo openstack, é necessário para o funcionamento desse script.
 
-- Acesso SSH à instância via chave pública previamente autorizada.
-- O script deve ser executado como um usuário com acesso SSH funcional.
-- A interface de rede da instância deve ser `ens4` (ou ajuste conforme necessário).
-- Preencher os placeholders `<network>`, `<ipv61>`, `<ipv62>` no script com valores reais de gateway e DNS IPv6.
+---
 
-## Uso
+## 📌 Como usar
+
+1. **Deixe o script executável** (só precisa fazer uma vez):
+   ```bash
+   chmod +x configura_rede.sh
+   ```
+
+2. **Execute o script** passando:
+   - O **IPv4** da máquina  
+   - O **usuário** para login (ex: `ubuntu`)  
+   - O **IPv6** que você quer configurar  
+
+   Exemplo:
+   ```bash
+   ./configura_rede.sh 10.0.0.2 ubuntu 2804:xxxx::1234
+   ```
+
+---
+
+## ⚙️ O que ele faz automaticamente
+
+- Acessa o servidor via SSH.  
+- Faz backup do arquivo original do **netplan**.  
+- Descobre o **MAC da interface ens4**.  
+- Cria um novo arquivo de configuração da rede (`01-netcfg.yaml`).  
+- Desativa a configuração de rede automática do **cloud-init**.  
+- Aplica as mudanças com `netplan apply`.  
+
+No final, a rede já estará funcionando com os novos dados. ✅  
+
+---
+
+## 📝 O que você precisa ajustar antes
+
+No script, troque os valores abaixo pelos corretos do seu ambiente:
 
 ```bash
-./configurar_ipv6.sh <IPv4> <USUARIO> <IPv6>
+GATEWAY="<colocar o gateway>"
+DNS1="colocar o dns1"
+DNS2="colocar o dns2"
 ```
 
-### Exemplo:
+---
 
-```bash
-./configurar_ipv6.sh 192.168.0.10 ubuntu 2804:abcd:1234::1
-```
+## 🚨 Erros comuns
 
-## O que o script faz:
+- **"Nenhum arquivo netplan encontrado!"**  
+  → O servidor não tem os arquivos padrão. Verifique o caminho.  
 
-1. Conecta-se via SSH à instância.
-2. Faz backup da configuração Netplan com timestamp.
-3. Extrai o MAC address da interface `ens4`.
-4. Substitui a configuração atual com o novo IPv6.
-5. Aplica o Netplan.
+- **"Erro: não consegui pegar o MAC da ens4"**  
+  → Talvez a interface da VM não seja `ens4`. Altere no script para a interface correta (`eth0`, `ens3`, etc).  
 
-## Observações
+---
 
-- Se for executar como `root`, certifique-se de que a chave SSH esteja presente no diretório `~/.ssh/` do root.
-- A configuração substitui completamente o conteúdo do arquivo `/etc/netplan/50-cloud-init.yaml porém salva uma cópia no mesmo diretorio`.
+Pronto 🎉  
+É só isso: editar os 3 valores fixos, rodar o script e a rede fica configurada.  
