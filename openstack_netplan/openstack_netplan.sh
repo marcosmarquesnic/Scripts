@@ -13,9 +13,9 @@ USUARIO="$2"
 IPV6="$3"
 
 # 🔹 Valores fixos do ambiente (ajusta conforme necessário)
-GATEWAY="<colocar o gateway>"
-DNS1="colocar o dns1"
-DNS2="colocar o dns2"
+GATEWAY="coloque o Gateway"
+DNS1="coloque o dns"
+DNS2="coloque o dns"
 
 echo "Iniciando conexão SSH para $USUARIO@$IPV4 ..."
 
@@ -24,11 +24,15 @@ ssh -o StrictHostKeyChecking=no -t "$USUARIO@$IPV4" << EOF
 
   TIMESTAMP=\$(date +"%Y%m%d_%H%M%S")
 
+  echo "Verificando se já existe /etc/netplan/01-netcfg.yaml ..."
+  if [ -f /etc/netplan/01-netcfg.yaml ]; then
+    echo "Arquivo /etc/netplan/01-netcfg.yaml já existe! Abortando para evitar sobrescrita."
+    exit 1
+  fi
+
   echo "Procurando arquivo netplan..."
   if [ -f /etc/netplan/50-cloud-init.yaml ]; then
     ORIG_FILE="/etc/netplan/50-cloud-init.yaml"
-  elif [ -f /etc/netplan/01-netcfg.yaml ]; then
-    ORIG_FILE="/etc/netplan/01-netcfg.yaml"
   else
     echo "Nenhum arquivo netplan encontrado!"
     exit 1
@@ -75,7 +79,6 @@ ssh -o StrictHostKeyChecking=no -t "$USUARIO@$IPV4" << EOF
   sudo mkdir -p /etc/cloud/cloud.cfg.d
   echo "network:
   config: disabled" | sudo tee /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg > /dev/null
-
 
   echo "Aplicando netplan..."
   sudo netplan apply
